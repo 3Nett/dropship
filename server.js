@@ -13,10 +13,6 @@ const PRODUCTS_FILE = path.join(__dirname, 'data', 'products.json');
 const ORDERS_FILE = path.join(__dirname, 'data', 'orders.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-/**
- * Read orders from the JSON file.  If the file does not exist, an
- * empty array is returned.
- */
 function readOrders() {
   try {
     const json = fs.readFileSync(ORDERS_FILE, 'utf8');
@@ -26,66 +22,17 @@ function readOrders() {
   }
 }
 
-/**
- * Persist the orders array back to the file system.
- * @param {Array} orders
- */
 function writeOrders(orders) {
   fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
 }
 
-/**
- * Serve a static file from the public directory.  Determines the
- * appropriate content type based on the file extension.  If the
- * requested file does not exist, returns false so the caller can
- * handle the request differently.
- * @param {http.ServerResponse} res
- * @param {string} pathname
- * @returns {boolean}
- */
-function serveStatic(res, pathname) {
-  const filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
-  if (filePath.indexOf(PUBLIC_DIR) !== 0) {
-    // Prevent directory traversal
-    return false;
-  }
-  if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-    const ext = path.extname(filePath).toLowerCase();
-    const mimeTypes = {
-      '.html': 'text/html',
-      '.css': 'text/css',
-      '.js': 'application/javascript',
-      '.json': 'application/json',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.svg': 'image/svg+xml',
-      '.ico': 'image/x-icon',
-    };
-    const contentType = mimeTypes[ext] || 'application/octet-stream';
-    const data = fs.readFileSync(filePath);
-    res.writeHead(200, { 'Content-Type': contentType });
-    res.end(data);
-    return true;
-  }
-  return false;
-}
-
-/**
- * Parse JSON body from an incoming request.  Returns a promise that
- * resolves to the parsed object or rejects on error.
- * @param {http.IncomingMessage} req
- */
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
-    });
+    req.on('data', (chunk) => (body += chunk));
     req.on('end', () => {
       try {
-        const json = JSON.parse(body || '{}');
-        resolve(json);
+        resolve(JSON.parse(body || '{}'));
       } catch (err) {
         reject(err);
       }
@@ -93,106 +40,154 @@ function parseJsonBody(req) {
   });
 }
 
-/**
- * Compute the total price of the items in the order.  Each item
- * should have an `id` and `quantity`.  The function reads the
- * product catalog to fetch unit prices.
- * @param {Array} items
- */
 function calculateTotal(items) {
   const products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
   let total = 0;
-  items.forEach((item) => {
+  for (const item of items) {
     const product = products.find((p) => p.id === item.id);
-    if (product) {
-      total += product.price * (item.quantity || 1);
-    }
-  });
+    if (product) total += product.price * (item.quantity || 1);
+  }
   return total;
 }
 
+// Basic content-type mapping
+const mimeTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+// Safer + more flexible static serving
+function serveStatic(res, pathname) {
+  // Normalize and stop directory traversal
+  let safePath = decodeURIComponent(pathname || '/');
+  if (safePath.includes('\0')) return false;
+
+  // If "/" -> index.html
+  if (safePath === '/') safePath = '/index.html';
+
+  // If request ends with "/" -> serve that folder's index.html
+  if (safePath.endsWith('/')) safePath = safePath + 'index.html';
+
+  const filePath = path.join(PUBLIC_DIR, safePath);
+
+  // Ensure file stays inside PUBLIC_DIR
+  const resolvedPublic = path.resolve(PUBLIC_DIR);
+  const resolvedFile = path.resolve(filePath);
+  if (!resolvedFile.startsWith(resolvedPublic)) return false;
+
+  if (!fs.existsSync(resolvedFile) || !fs.statSync(resolvedFile).isFile()) return false;
+
+  const ext = path.extname(resolvedFile).toLowerCase();
+  res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+  res.end(fs.readFileSync(resolvedFile));
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
-    const parsedUrl = url.parse(req.url, true);
-    const pathname = parsedUrl.pathname;
-    // Serve static files
-    if (req.method === 'GET' && !pathname.startsWith('/api')) {
-      if (serveStatic(res, pathname)) {
-        return;
-      }
+  const parsedUrl = url.parse(req.url, true);
+  const pathname = parsedUrl.pathname || '/';
+
+  // Health check (helps Railway keep it alive)
+  if (pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('ok');
+    return;
+  }
+
+  // Serve static files for any non-API GET/HEAD
+  if ((req.method === 'GET' || req.method === 'HEAD') && !pathname.startsWith('/api/')) {
+    if (serveStatic(res, pathname)) return;
+  }
+
+  // API: GET /api/products
+  if (pathname === '/api/products' && req.method === 'GET') {
+    const products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(products));
+    return;
+  }
+
+  // API: POST /api/orders
+  if (pathname === '/api/orders' && req.method === 'POST') {
+    try {
+      const payload = await parseJsonBody(req);
+      const items = payload.items || [];
+      const total = calculateTotal(items);
+
+      const paypalOrderId = await paypalCreateOrder(total);
+
+      const orders = readOrders();
+      const order = {
+        id: paypalOrderId,
+        items,
+        total,
+        status: 'pending',
+        customer: payload.customer || {},
+      };
+      orders.push(order);
+      writeOrders(orders);
+
+      res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ orderId: paypalOrderId }));
+    } catch (err) {
+      console.error(err);
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
     }
-    // API: GET /api/products
-    if (pathname === '/api/products' && req.method === 'GET') {
-      const products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(products));
-      return;
-    }
-    // API: POST /api/orders
-    if (pathname === '/api/orders' && req.method === 'POST') {
-      try {
-        const payload = await parseJsonBody(req);
-        const items = payload.items || [];
-        const total = calculateTotal(items);
-        // Create a PayPal order to obtain an order ID.  The order is not
-        // captured yet.  The client will use this ID to approve the
-        // payment in the PayPal popup.
-        const paypalOrderId = await paypalCreateOrder(total);
-        // Create local order record with status "pending"
-        const orders = readOrders();
-        const order = {
-          id: paypalOrderId,
-          items,
-          total,
-          status: 'pending',
-          customer: payload.customer || {},
-        };
-        orders.push(order);
+    return;
+  }
+
+  // API: POST /api/orders/{id}/capture
+  if (pathname.startsWith('/api/orders/') && pathname.endsWith('/capture') && req.method === 'POST') {
+    const segments = pathname.split('/');
+    const orderId = segments[3];
+    try {
+      const captureResult = await paypalCaptureOrder(orderId);
+
+      const orders = readOrders();
+      const idx = orders.findIndex((o) => o.id === orderId);
+      if (idx !== -1) {
+        orders[idx].status = 'paid';
         writeOrders(orders);
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ orderId: paypalOrderId }));
-      } catch (err) {
-        console.error(err);
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
+        await forwardOrder(orders[idx]);
       }
-      return;
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ status: 'captured', result: captureResult }));
+    } catch (err) {
+      console.error(err);
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
     }
-    // API: POST /api/orders/{id}/capture
-    if (pathname.startsWith('/api/orders/') && pathname.endsWith('/capture') && req.method === 'POST') {
-      const segments = pathname.split('/');
-      const orderId = segments[3];
-      try {
-        const captureResult = await paypalCaptureOrder(orderId);
-        // Update local order status
-        const orders = readOrders();
-        const idx = orders.findIndex((o) => o.id === orderId);
-        if (idx !== -1) {
-          orders[idx].status = 'paid';
-          writeOrders(orders);
-          // Forward to DSers for fulfillment
-          await forwardOrder(orders[idx]);
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'captured', result: captureResult }));
-      } catch (err) {
-        console.error(err);
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
-    // 404 for unknown API endpoints
-    if (pathname.startsWith('/api/')) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
-      return;
-    }
-    // Fallback: 404
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not found');
+    return;
+  }
+
+  // 404 for unknown API endpoints
+  if (pathname.startsWith('/api/')) {
+    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Not found' }));
+    return;
+  }
+
+  // If someone hits a frontend route that doesn't exist, send them back to index.html
+  // (so your site never shows "Not found" for normal browsing)
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    if (serveStatic(res, '/index.html')) return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Not found');
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Dropshipping server listening on port ${PORT}`);
 });
