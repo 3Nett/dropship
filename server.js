@@ -3,190 +3,168 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-// Import PayPal helper functions
-const { createOrder: paypalCreateOrder, captureOrder: paypalCaptureOrder } = require('./paypal');
-// Import DSers helper functions
+// PayPal + DSers
+const { createOrder, captureOrder } = require('./paypal');
 const { forwardOrder } = require('./dsers');
 
-// File paths for data storage
-const PRODUCTS_FILE = path.join(__dirname, 'data', 'products.json');
-const ORDERS_FILE = path.join(__dirname, 'data', 'orders.json');
+// Paths
+const DATA_DIR = path.join(__dirname, 'data');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-function readOrders() {
+// Helpers
+function readJSON(file, fallback = []) {
   try {
-    const json = fs.readFileSync(ORDERS_FILE, 'utf8');
-    return JSON.parse(json);
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function writeOrders(orders) {
-  fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+function writeJSON(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-function parseJsonBody(req) {
+function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (chunk) => (body += chunk));
+    req.on('data', c => (body += c));
     req.on('end', () => {
       try {
         resolve(JSON.parse(body || '{}'));
-      } catch (err) {
-        reject(err);
+      } catch (e) {
+        reject(e);
       }
     });
   });
 }
 
-function calculateTotal(items) {
-  const products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
-  let total = 0;
-  for (const item of items) {
-    const product = products.find((p) => p.id === item.id);
-    if (product) total += product.price * (item.quantity || 1);
-  }
-  return total;
-}
-
-// Basic content-type mapping
-const mimeTypes = {
+const MIME = {
   '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.json': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.txt': 'text/plain; charset=utf-8',
+  '.ico': 'image/x-icon'
 };
 
-// Safer + more flexible static serving
 function serveStatic(res, pathname) {
-  // Normalize and stop directory traversal
-  let safePath = decodeURIComponent(pathname || '/');
-  if (safePath.includes('\0')) return false;
+  let relPath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const filePath = path.join(PUBLIC_DIR, relPath);
 
-  // If "/" -> index.html
-  if (safePath === '/') safePath = '/index.html';
+  if (!path.resolve(filePath).startsWith(path.resolve(PUBLIC_DIR))) {
+    return false;
+  }
 
-  // If request ends with "/" -> serve that folder's index.html
-  if (safePath.endsWith('/')) safePath = safePath + 'index.html';
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    return false;
+  }
 
-  const filePath = path.join(PUBLIC_DIR, safePath);
-
-  // Ensure file stays inside PUBLIC_DIR
-  const resolvedPublic = path.resolve(PUBLIC_DIR);
-  const resolvedFile = path.resolve(filePath);
-  if (!resolvedFile.startsWith(resolvedPublic)) return false;
-
-  if (!fs.existsSync(resolvedFile) || !fs.statSync(resolvedFile).isFile()) return false;
-
-  const ext = path.extname(resolvedFile).toLowerCase();
-  res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
-  res.end(fs.readFileSync(resolvedFile));
+  const ext = path.extname(filePath).toLowerCase();
+  res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+  res.end(fs.readFileSync(filePath));
   return true;
 }
 
+// Server
 const server = http.createServer(async (req, res) => {
-  const parsedUrl = url.parse(req.url, true);
-  const pathname = parsedUrl.pathname || '/';
+  const parsed = url.parse(req.url, true);
+  const pathname = parsed.pathname || '/';
 
-  // Health check (helps Railway keep it alive)
+  // Health check (Railway)
   if (pathname === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
     return;
   }
 
-  // Serve static files for any non-API GET/HEAD
-  if ((req.method === 'GET' || req.method === 'HEAD') && !pathname.startsWith('/api/')) {
+  // Static files
+  if ((req.method === 'GET' || req.method === 'HEAD') && !pathname.startsWith('/api')) {
     if (serveStatic(res, pathname)) return;
   }
 
-  // API: GET /api/products
+  // API: products
   if (pathname === '/api/products' && req.method === 'GET') {
-    const products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    const products = readJSON(PRODUCTS_FILE, []);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(products));
     return;
   }
 
-  // API: POST /api/orders
+  // API: create order
   if (pathname === '/api/orders' && req.method === 'POST') {
     try {
-      const payload = await parseJsonBody(req);
-      const items = payload.items || [];
-      const total = calculateTotal(items);
+      const body = await parseBody(req);
+      const items = body.items || [];
+      const products = readJSON(PRODUCTS_FILE, []);
 
-      const paypalOrderId = await paypalCreateOrder(total);
+      let total = 0;
+      for (const item of items) {
+        const p = products.find(x => x.id === item.id);
+        if (p) total += p.price * (item.quantity || 1);
+      }
 
-      const orders = readOrders();
-      const order = {
-        id: paypalOrderId,
+      const paypalId = await createOrder(total);
+
+      const orders = readJSON(ORDERS_FILE, []);
+      orders.push({
+        id: paypalId,
         items,
         total,
         status: 'pending',
-        customer: payload.customer || {},
-      };
-      orders.push(order);
-      writeOrders(orders);
+        customer: body.customer || {}
+      });
+      writeJSON(ORDERS_FILE, orders);
 
-      res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ orderId: paypalOrderId }));
-    } catch (err) {
-      console.error(err);
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: err.message }));
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ orderId: paypalId }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
     }
     return;
   }
 
-  // API: POST /api/orders/{id}/capture
+  // API: capture order
   if (pathname.startsWith('/api/orders/') && pathname.endsWith('/capture') && req.method === 'POST') {
-    const segments = pathname.split('/');
-    const orderId = segments[3];
+    const orderId = pathname.split('/')[3];
     try {
-      const captureResult = await paypalCaptureOrder(orderId);
-
-      const orders = readOrders();
-      const idx = orders.findIndex((o) => o.id === orderId);
-      if (idx !== -1) {
-        orders[idx].status = 'paid';
-        writeOrders(orders);
-        await forwardOrder(orders[idx]);
+      const result = await captureOrder(orderId);
+      const orders = readJSON(ORDERS_FILE, []);
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+        order.status = 'paid';
+        writeJSON(ORDERS_FILE, orders);
+        await forwardOrder(order);
       }
-
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ status: 'captured', result: captureResult }));
-    } catch (err) {
-      console.error(err);
-      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: err.message }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'captured', result }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
     }
     return;
   }
 
-  // 404 for unknown API endpoints
-  if (pathname.startsWith('/api/')) {
-    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+  // Unknown API
+  if (pathname.startsWith('/api')) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
     return;
   }
 
-  // If someone hits a frontend route that doesn't exist, send them back to index.html
-  // (so your site never shows "Not found" for normal browsing)
-  if (req.method === 'GET' || req.method === 'HEAD') {
-    if (serveStatic(res, '/index.html')) return;
-  }
+  // SPA fallback → always index.html
+  if (serveStatic(res, '/')) return;
 
-  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not found');
 });
 
+// Listen
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Dropshipping server listening on port ${PORT}`);
