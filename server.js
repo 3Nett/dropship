@@ -193,6 +193,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Dropshipping server listening on port ${PORT}`);
 });
