@@ -11,7 +11,7 @@ const { forwardOrder } = require('./dsers');
 const DATA_DIR = path.join(__dirname, 'data');
 const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
 const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const PUBLIC_DIR = path.join(__dirname, 'dropship', 'public');
 
 // Helpers
 function readJSON(file, fallback = []) {
