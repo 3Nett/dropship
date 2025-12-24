@@ -1,0 +1,46 @@
+[
+  {
+    "id": "p1",
+    "title": "Wireless Bluetooth Earbuds",
+    "description": "High‑quality true wireless earbuds with noise cancellation and long battery life.",
+    "price": 29.99,
+    "image": "/img/earbuds.jpg",
+    "shippingTime": "7‑14 days",
+    "inventory": 100,
+    "rating": 4.7,
+    "reviews": [
+      {
+        "name": "Alice",
+        "comment": "Great sound quality and comfortable fit!",
+        "rating": 5
+      },
+      {
+        "name": "Bob",
+        "comment": "Battery lasts long enough for daily use.",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "id": "p2",
+    "title": "Portable Power Bank 20000mAh",
+    "description": "Sleek and powerful power bank with fast charging and multiple USB ports.",
+    "price": 24.95,
+    "image": "/img/powerbank.jpg",
+    "shippingTime": "10‑20 days",
+    "inventory": 50,
+    "rating": 4.5,
+    "reviews": [
+      {
+        "name": "Carla",
+        "comment": "Perfect for travel and charges my phone several times.",
+        "rating": 5
+      },
+      {
+        "name": "Dan",
+        "comment": "Compact design, but shipping was a bit slow.",
+        "rating": 4
+      }
+    ]
+  }
+]

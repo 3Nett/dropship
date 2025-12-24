@@ -1,0 +1,12 @@
+{
+  "paypal": {
+    "client_id": "YOUR_PAYPAL_CLIENT_ID",
+    "client_secret": "YOUR_PAYPAL_CLIENT_SECRET",
+    "environment": "sandbox"
+  },
+  "dsers": {
+    "api_key": "YOUR_DSERS_API_KEY",
+    "api_secret": "YOUR_DSERS_API_SECRET",
+    "api_base": "https://api.dsers.com"  
+  }
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Cart – TechDrops</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>TechDrops</h1>
+      <nav>
+        <a href="/cart.html" class="cart">
+          Cart <span class="cart-count" id="cartCount">0</span>
+        </a>
+      </nav>
+    </header>
+    <div class="container">
+      <h2>Your Cart</h2>
+      <table class="cart-table" id="cartTable">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Price</th>
+            <th>Quantity</th>
+            <th>Total</th>
+            <th>Remove</th>
+          </tr>
+        </thead>
+        <tbody id="cartBody"></tbody>
+      </table>
+      <div class="checkout-summary">
+        <div class="summary-row">
+          <span>Subtotal:</span>
+          <span id="cartSubtotal">€0.00</span>
+        </div>
+        <div class="summary-row">
+          <span>Shipping:</span>
+          <span id="cartShipping">Free</span>
+        </div>
+        <div class="summary-row">
+          <strong>Total:</strong>
+          <strong id="cartTotal">€0.00</strong>
+        </div>
+        <a href="/checkout.html" class="btn" id="checkoutBtn">Proceed to Checkout</a>
+      </div>
+    </div>
+    <script src="/js/cart.js"></script>
+  </body>
+</html>

@@ -1,0 +1,212 @@
+/*
+  Minimal styling for the dropshipping storefront.  The design
+  emphasizes clean layouts, generous whitespace and a tech‑inspired
+  palette.  Mobile‑first rules are defined up front with larger
+  breakpoints layered in below.
+*/
+
+:root {
+  --color-primary: #0070f3;
+  --color-secondary: #0a2540;
+  --color-accent: #00c49a;
+  --color-light: #f7fafc;
+  --color-dark: #1a202c;
+  --border-radius: 6px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, Segoe UI,
+    Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-light);
+  color: var(--color-dark);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+header {
+  background: var(--color-primary);
+  color: #fff;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+}
+
+nav a {
+  color: #fff;
+  margin-left: 1rem;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+}
+
+.card-content {
+  padding: 0.8rem;
+  flex: 1;
+}
+
+.card h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.card p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.price {
+  font-weight: bold;
+  color: var(--color-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.btn {
+  display: inline-block;
+  background: var(--color-primary);
+  color: #fff;
+  padding: 0.5rem 0.8rem;
+  border: none;
+  border-radius: var(--border-radius);
+  text-align: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+  text-decoration: none;
+}
+
+.btn:hover {
+  background: var(--color-secondary);
+}
+
+.cart {
+  position: relative;
+}
+
+.cart-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  margin-right: 0.5rem;
+  font-size: 0.8rem;
+  color: #4a5568;
+}
+
+.badge svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 0.2rem;
+}
+
+.trust-badges {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.reviews {
+  margin-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.review {
+  margin-bottom: 1rem;
+}
+
+.review .name {
+  font-weight: bold;
+}
+
+.review .rating {
+  color: var(--color-accent);
+  margin-right: 0.3rem;
+}
+
+.cart-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.cart-table th,
+.cart-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.cart-table th {
+  background: #f1f5f9;
+}
+
+.checkout-summary {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.order-confirm {
+  text-align: center;
+  padding: 2rem;
+}
